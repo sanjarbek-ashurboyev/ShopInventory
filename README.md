@@ -1,5 +1,7 @@
 # ShopInventory
 
+[![Tests](https://github.com/sanjarbek-ashurboyev/ShopInventory/actions/workflows/tests.yml/badge.svg)](https://github.com/sanjarbek-ashurboyev/ShopInventory/actions/workflows/tests.yml)
+
 Inventory and point-of-sale system for a shoe shop, built to be used from a phone behind
 the counter. Staff add deliveries, print barcode labels, scan a box with the phone camera
 to sell it, and see the day's profit and cash-drawer total at closing.

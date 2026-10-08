@@ -87,6 +87,16 @@ API docs: http://127.0.0.1:8000/api/docs/
 Runs as Docker containers (Django + Gunicorn, PostgreSQL, and nginx serving the React
 build). The full guide, including HTTPS, backups and updates, is in [DEPLOY.md](DEPLOY.md).
 
+## Known limitations
+
+- **One access level.** Every signed-in user can see purchase prices and profit, edit or
+  delete products and export data. There is no separate seller role yet.
+- **A mistaken sale can only be undone in the Django admin.** The API's sales history is
+  read-only; deleting a sale in the admin puts the pair back in stock.
+- **The tests run on SQLite only.** Selling the last pair is a single atomic `UPDATE`, but
+  that guarantee is not yet tested against PostgreSQL with concurrent requests
+  ([#1](https://github.com/sanjarbek-ashurboyev/ShopInventory/issues/1)) ([#2](https://github.com/sanjarbek-ashurboyev/ShopInventory/issues/2)).
+
 ## License
 
 [MIT](LICENSE)

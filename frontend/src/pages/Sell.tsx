@@ -27,7 +27,8 @@ export default function Sell() {
 
   const unit = t('som')
   const amount = parseMoney(price)
-  const margin = amount === null ? null : amount - e.batch.bought_price
+  const cost = e.batch.bought_price ?? null
+  const margin = amount === null || cost === null ? null : amount - cost
   const tooHigh = amount !== null && amount > MAX_PRICE
 
   function submit(event: FormEvent) {
@@ -45,7 +46,7 @@ export default function Sell() {
     })
   }
 
-  const suggestions = [...new Set([e.last_brand_price, e.batch.bought_price].filter((p): p is number => p !== null))]
+  const suggestions = [...new Set([e.last_brand_price, cost].filter((p): p is number => p !== null))]
 
   return (
     <>
@@ -56,7 +57,7 @@ export default function Sell() {
         <SizeChip size={e.size} />
         <div>
           <strong>{e.batch.brand}</strong>
-          <p>{t('boughtFor', { price: som(e.batch.bought_price, unit) })}, {e.quantity} {t('left')}</p>
+          <p>{cost !== null && `${t('boughtFor', { price: som(cost, unit) })}, `}{e.quantity} {t('left')}</p>
         </div>
       </div>
 

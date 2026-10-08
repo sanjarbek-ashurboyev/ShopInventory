@@ -1,3 +1,4 @@
+import importlib
 import io
 import json
 import shutil
@@ -5,8 +6,10 @@ import tempfile
 from datetime import timedelta
 from unittest import mock
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -17,6 +20,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import CODE_ALPHABET, CODE_LENGTH, Batch, Restock, Sale, SizeEntry
+from .permissions import OWNERS_GROUP
 
 MEDIA = tempfile.mkdtemp()
 
@@ -30,6 +34,7 @@ class ApiTestCase(APITestCase):
 
     def setUp(self):
         self.user = get_user_model().objects.create_user('owner', password='bazaar-pass-2026')
+        self.user.groups.add(Group.objects.get_or_create(name=OWNERS_GROUP)[0])
         self.client.force_authenticate(self.user)
 
     def add(self, brand='Nike Air', price=250_000, sizes=(('41', 5), ('42', 3))):
@@ -580,3 +585,105 @@ class DailyReportTests(ApiTestCase):
 
     def test_backfilled_restocks_exist_for_new_stock(self):
         self.assertEqual(Restock.objects.count(), 2)
+
+
+# Keys that would tell a seller what the shop paid, at any depth of a response.
+PURCHASE_KEYS = {'bought_price', 'profit', 'cost', 'min_price', 'max_price'}
+
+
+def purchase_keys(data):
+    if isinstance(data, dict):
+        return (data.keys() & PURCHASE_KEYS) | {key for value in data.values() for key in purchase_keys(value)}
+    if isinstance(data, list):
+        return {key for value in data for key in purchase_keys(value)}
+    return set()
+
+
+class RoleTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.add(brand='Ecco', price=100_000, sizes=(('41', 3),))
+        self.add(brand='Nike Air', price=250_000, sizes=(('42', 3),))
+        self.code = self.entry('42').code
+        self.sell(self.code)
+        self.seller = get_user_model().objects.create_user('seller', password='counter-pass-2026')
+        self.client.force_authenticate(self.seller)
+
+    def test_new_accounts_are_sellers_and_superusers_are_owners(self):
+        self.assertFalse(self.client.get('/api/auth/me/').data['is_owner'])
+        self.client.force_authenticate(get_user_model().objects.create_superuser('boss', password='boss-pass-2026'))
+        self.assertTrue(self.client.get('/api/auth/me/').data['is_owner'])
+        self.client.force_authenticate(self.user)
+        self.assertTrue(self.client.get('/api/auth/me/').data['is_owner'])
+
+    def test_seller_can_find_sell_and_label(self):
+        self.assertEqual(self.client.get('/api/entries/grouped/').data['count'], 2)
+        self.assertEqual(self.client.get(f'/api/entries/{self.code.lower()}/').status_code, 200)
+        self.assertEqual(self.sell(self.code, price=320_000).status_code, 201)
+        self.assertEqual(self.client.get(f'/api/entries/{self.code}/label/').status_code, 200)
+        response = self.client.post('/api/labels/pdf/', {'items': [{'code': self.code}]}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get('/api/sales/').data['count'], 2)
+
+    def test_seller_never_receives_purchase_prices_or_profit(self):
+        responses = {
+            'list': self.client.get('/api/entries/?stock=all'),
+            'grouped': self.client.get('/api/entries/grouped/'),
+            'detail': self.client.get(f'/api/entries/{self.code}/'),
+            'sales': self.client.get('/api/sales/'),
+            'sale': self.client.get(f'/api/sales/{Sale.objects.get().pk}/'),
+            'sell': self.sell(self.code),
+        }
+        for name, response in responses.items():
+            self.assertIn(response.status_code, (200, 201), name)
+            self.assertEqual(purchase_keys(response.data), set(), name)
+        self.assertEqual(len(responses['detail'].data['recent_sales']), 1)
+
+    def test_owner_still_receives_them(self):
+        self.client.force_authenticate(self.user)
+        self.assertEqual(purchase_keys(self.client.get('/api/entries/grouped/').data), {'bought_price', 'min_price', 'max_price'})
+        self.assertEqual(purchase_keys(self.client.get(f'/api/entries/{self.code}/').data), {'bought_price', 'profit'})
+
+    def test_owner_only_endpoints_are_forbidden_to_sellers(self):
+        batch = self.entry('42').batch.pk
+        requests = [
+            ('get', '/api/batches/'),
+            ('get', '/api/batches/brands/'),
+            ('get', f'/api/batches/{batch}/'),
+            ('post', '/api/batches/'),
+            ('patch', f'/api/batches/{batch}/'),
+            ('delete', f'/api/batches/{batch}/'),
+            ('patch', f'/api/entries/{self.code}/'),
+            ('delete', f'/api/entries/{self.entry("41", "Ecco").code}/'),
+            ('get', '/api/stats/'),
+            ('get', '/api/export/inventory.csv'),
+            ('get', '/api/export/sales.xlsx'),
+            ('get', '/api/reports/daily/'),
+            ('get', '/api/reports/days/'),
+            ('get', '/api/reports/daily.xlsx'),
+        ]
+        body = {'brand': 'Puma', 'bought_price': 1, 'quantity': 0, 'sizes': [{'size': '40', 'quantity': 1}]}
+        for method, url in requests:
+            response = getattr(self.client, method)(url, body if method in ('post', 'patch') else None, format='json')
+            self.assertEqual(response.status_code, 403, f'{method} {url}')
+        self.assertEqual((Batch.objects.count(), SizeEntry.objects.count()), (2, 2))
+        self.assertEqual(self.entry('42').quantity, 2)
+        self.assertEqual(self.entry('42').batch.bought_price, 250_000)
+
+    def test_seller_cannot_sort_by_purchase_price(self):
+        def brands(user, ordering):
+            self.client.force_authenticate(user)
+            grouped = self.client.get(f'/api/entries/grouped/?ordering={ordering}').data['results']
+            flat = self.client.get(f'/api/entries/?ordering={ordering}').data['results']
+            return [g['brand'] for g in grouped], [e['batch']['brand'] for e in flat]
+
+        newest_first = (['Nike Air', 'Ecco'], ['Nike Air', 'Ecco'])
+        self.assertEqual(brands(self.user, 'batch__bought_price'), (['Ecco', 'Nike Air'], ['Ecco', 'Nike Air']))
+        self.assertEqual(brands(self.seller, 'batch__bought_price'), newest_first)
+        self.assertEqual(brands(self.seller, '-batch__bought_price'), newest_first)
+
+    def test_accounts_from_before_roles_become_owners(self):
+        migration = importlib.import_module('inventory.migrations.0005_owners_group')
+        Group.objects.filter(name=OWNERS_GROUP).delete()
+        migration.create_owners(apps, None)
+        self.assertEqual(set(Group.objects.get(name=OWNERS_GROUP).user_set.all()), {self.user, self.seller})

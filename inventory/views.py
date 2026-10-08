@@ -13,6 +13,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -21,6 +22,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from . import reports, services, stats
 from .filters import SaleFilter, SizeEntryFilter
 from .models import Batch, Sale, SizeEntry
+from .permissions import IsOwner, is_owner
 from .security import excel_safe
 from .serializers import (
     BatchCreateSerializer,
@@ -48,6 +50,8 @@ BRAND_ORDERING = {
     '-batch__bought_price': ['-max_price'],
     'batch__bought_price': ['min_price'],
 }
+# Sorting by purchase price would show a seller which shoes cost the shop more.
+PRICE_ORDERING = {'batch__bought_price', '-batch__bought_price'}
 
 
 def _size_key(size):
@@ -75,6 +79,7 @@ class BatchViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Up
 
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
+    permission_classes = [IsAuthenticated, IsOwner]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     ordering_fields = ['date_added', 'brand', 'bought_price']
     http_method_names = ['get', 'post', 'patch', 'delete']
@@ -117,9 +122,19 @@ class SizeEntryViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixin
     lookup_field = 'code'
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     filterset_class = SizeEntryFilter
-    ordering_fields = ['batch__date_added', 'quantity', 'batch__bought_price', 'batch__brand', 'size']
     ordering = ['-batch__date_added', 'batch__brand', 'size']
     http_method_names = ['get', 'post', 'patch', 'delete']
+
+    def get_permissions(self):
+        # Sellers look up, sell and print labels; changing or removing stock is the owner's.
+        if self.action in ('partial_update', 'destroy'):
+            return [IsAuthenticated(), IsOwner()]
+        return super().get_permissions()
+
+    @property
+    def ordering_fields(self):
+        fields = ['batch__date_added', 'quantity', 'batch__brand', 'size']
+        return [*fields, 'batch__bought_price'] if is_owner(self.request.user) else fields
 
     def get_serializer_class(self):
         return SizeEntryDetailSerializer if self.action == 'retrieve' else SizeEntrySerializer
@@ -151,13 +166,16 @@ class SizeEntryViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixin
     def grouped(self, request):
         """The stock list one brand per row: same filters as the list, paginated by brand so a brand is never split."""
         entries = self.filter_queryset(self.get_queryset()).order_by()
+        ordering = request.query_params.get('ordering')
+        if ordering in PRICE_ORDERING and not is_owner(request.user):
+            ordering = None
         groups = (
             entries.values(brand=F('batch__brand'))
             .annotate(
                 pairs=Sum('quantity'), min_price=Min('batch__bought_price'), max_price=Max('batch__bought_price'),
                 last_added=Max('batch__date_added'), deliveries=Count('batch', distinct=True),
             )
-            .order_by(*BRAND_ORDERING.get(request.query_params.get('ordering'), ['-last_added']), 'brand')
+            .order_by(*BRAND_ORDERING.get(ordering, ['-last_added']), 'brand')
         )
         page = self.paginate_queryset(groups)
 
@@ -231,6 +249,8 @@ def _date_range(request, default_days):
 
 
 class StatsView(APIView):
+    permission_classes = [IsAuthenticated, IsOwner]
+
     @extend_schema(parameters=[DateRangeSerializer], responses=OpenApiTypes.OBJECT)
     def get(self, request):
         start, end, query = _date_range(request, default_days=30)
@@ -259,6 +279,8 @@ class StatsView(APIView):
 
 class ExportView(APIView):
     """Download inventory or sales history as CSV or Excel."""
+
+    permission_classes = [IsAuthenticated, IsOwner]
 
     @extend_schema(
         parameters=[DateRangeSerializer],
@@ -319,6 +341,8 @@ def _report_day(request):
 class DailyReportListView(APIView):
     """Per-day totals (sold and received) for a range, newest day first. Defaults to the last 30 days."""
 
+    permission_classes = [IsAuthenticated, IsOwner]
+
     @extend_schema(parameters=[DateRangeSerializer], responses=OpenApiTypes.OBJECT)
     def get(self, request):
         start, end, _query = _date_range(request, default_days=30)
@@ -330,15 +354,19 @@ class DailyReportListView(APIView):
 class DailyReportView(APIView):
     """Everything that happened on one day. Defaults to today (shop time)."""
 
+    permission_classes = [IsAuthenticated, IsOwner]
+
     @extend_schema(parameters=[DayQuerySerializer], responses=OpenApiTypes.OBJECT)
     def get(self, request):
         report = reports.daily(_report_day(request))
-        report['sales_list'] = SaleSerializer(report['sales_list'], many=True).data
+        report['sales_list'] = SaleSerializer(report['sales_list'], many=True, context={'request': request}).data
         return Response(report)
 
 
 class DailyReportExportView(APIView):
     """One day's report as an Excel workbook: sales and received stock on separate sheets."""
+
+    permission_classes = [IsAuthenticated, IsOwner]
 
     @extend_schema(parameters=[DayQuerySerializer], responses={(200, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'): OpenApiTypes.BINARY})
     def get(self, request):

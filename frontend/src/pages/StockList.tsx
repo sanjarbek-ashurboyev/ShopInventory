@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { useBrandGroups, useStats } from '../api/hooks'
+import { useBrandGroups, useIsOwner, useStats } from '../api/hooks'
 import type { BrandGroup } from '../api/types'
 import { ChevronIcon, FilterIcon } from '../components/Icons'
 import { ErrorNotice, Loading, SizeChip } from '../components/ui'
@@ -13,6 +13,8 @@ const ORDERING: [string, MessageKey][] = [
   ['batch__date_added', 'oldestFirst'],
   ['-quantity', 'mostPairs'],
   ['quantity', 'fewestPairs'],
+]
+const PRICE_ORDERING: [string, MessageKey][] = [
   ['-batch__bought_price', 'highestPrice'],
   ['batch__bought_price', 'lowestPrice'],
 ]
@@ -47,7 +49,8 @@ export default function StockList() {
   }
 
   const entries = useBrandGroups({ q, size, stock, added_from: addedFrom, added_to: addedTo, ordering: ordering || undefined })
-  const summary = useStats({})
+  const isOwner = useIsOwner()
+  const summary = useStats({}, isOwner)
   const rows = entries.data?.pages.flatMap((page) => page.results) ?? []
   const [open, setOpen] = useState<Set<string>>(new Set())
 
@@ -65,10 +68,10 @@ export default function StockList() {
     <>
       <div className="page-head">
         <h1 className="page-title">{t('navStock')}</h1>
-        <Link className="button small" to="/add">{t('addStock')}</Link>
+        {isOwner && <Link className="button small" to="/add">{t('addStock')}</Link>}
       </div>
 
-      {summary.data && (
+      {isOwner && summary.data && (
         <dl className="stock-summary">
           <div><dt>{t('pairsOnShelf')}</dt><dd>{spaced(summary.data.inventory.pairs)}</dd></div>
           <div><dt>{t('worthAtCost')}</dt><dd>{som(summary.data.inventory.value, t('som'))}</dd></div>
@@ -99,7 +102,7 @@ export default function StockList() {
               <label className="field-label" htmlFor="ordering">{t('sort')}</label>
               <select id="ordering" className="input" value={ordering || '-batch__date_added'}
                 onChange={(e) => update({ ordering: e.target.value === '-batch__date_added' ? '' : e.target.value })}>
-                {ORDERING.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
+                {(isOwner ? [...ORDERING, ...PRICE_ORDERING] : ORDERING).map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
               </select>
             </div>
             <div className="field">
@@ -147,7 +150,7 @@ export default function StockList() {
           <div className="empty">
             <h2>{t('emptyTitle')}</h2>
             <p>{t('emptyHint')}</p>
-            <Link className="button" to="/add">{t('addStock')}</Link>
+            {isOwner && <Link className="button" to="/add">{t('addStock')}</Link>}
           </div>
         )
       ) : (
@@ -174,9 +177,9 @@ export default function StockList() {
 
 function BrandRow({ id, group, open, onToggle }: { id: string; group: BrandGroup; open: boolean; onToggle: () => void }) {
   const { t } = useI18n()
-  const price = group.min_price === group.max_price
-    ? som(group.min_price, t('som'))
-    : `${spaced(group.min_price)} – ${som(group.max_price, t('som'))}`
+  const { min_price: min, max_price: max } = group
+  // Sellers get no purchase prices, so their rows show only the date.
+  const price = min === undefined || max === undefined ? null : min === max ? som(min, t('som')) : `${spaced(min)} – ${som(max, t('som'))}`
   // Price and date per size only matter when the sizes came in different deliveries.
   const mixed = group.deliveries > 1
 
@@ -186,7 +189,7 @@ function BrandRow({ id, group, open, onToggle }: { id: string; group: BrandGroup
         <span>
           <span className="stock-brand">{group.brand}</span>
           <span className="stock-meta">
-            {t('sizesCount', { n: group.entries.length })} · {price}, {date(group.last_added)}
+            {t('sizesCount', { n: group.entries.length })} · {price && `${price}, `}{date(group.last_added)}
           </span>
         </span>
         <span className="stock-qty">
@@ -206,7 +209,7 @@ function BrandRow({ id, group, open, onToggle }: { id: string; group: BrandGroup
               <Link to={`/e/${entry.code}`}>
                 <SizeChip size={entry.size} />
                 <span className="stock-meta">
-                  {mixed && <>{som(entry.batch.bought_price, t('som'))}, {date(entry.batch.date_added)}</>}
+                  {mixed && <>{entry.batch.bought_price !== undefined && `${som(entry.batch.bought_price, t('som'))}, `}{date(entry.batch.date_added)}</>}
                 </span>
                 <span className="stock-qty">
                   {entry.in_stock ? (

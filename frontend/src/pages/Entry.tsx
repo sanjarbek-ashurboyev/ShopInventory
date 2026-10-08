@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ApiError, download } from '../api/client'
-import { useEntry } from '../api/hooks'
+import { useEntry, useIsOwner } from '../api/hooks'
 import { BackIcon } from '../components/Icons'
 import { ErrorNotice, Loading, useToast } from '../components/ui'
 import { useI18n } from '../i18n'
@@ -13,6 +13,7 @@ export default function Entry() {
   const navigate = useNavigate()
   const toast = useToast()
   const entry = useEntry(code)
+  const isOwner = useIsOwner()
   const [downloading, setDownloading] = useState(false)
 
   if (entry.isPending) return <Loading />
@@ -57,7 +58,7 @@ export default function Entry() {
         <div className="tag-top">
           <div>
             <h1 className="tag-brand">{e.batch.brand}</h1>
-            <p className="tag-price">{t('boughtFor', { price: som(e.batch.bought_price, unit) })}</p>
+            {e.batch.bought_price !== undefined && <p className="tag-price">{t('boughtFor', { price: som(e.batch.bought_price, unit) })}</p>}
           </div>
           <div className="tag-size">
             <small>{t('size')}</small>
@@ -89,7 +90,7 @@ export default function Entry() {
           </button>
           <Link className="button ghost" to={`/stock?q=${encodeURIComponent(e.batch.brand)}&stock=all`}>{t('findSimilar')}</Link>
         </div>
-        <Link className="button ghost block" to={`/e/${e.code}/edit`}>{t('editProduct')}</Link>
+        {isOwner && <Link className="button ghost block" to={`/e/${e.code}/edit`}>{t('editProduct')}</Link>}
       </div>
 
       <dl className="facts">
@@ -109,9 +110,11 @@ export default function Entry() {
                 <time dateTime={sale.sold_at}>{dateTime(sale.sold_at)}</time>
                 <span className="amount">
                   {som(sale.sold_price, unit)}
-                  <span className={`profit${sale.profit < 0 ? ' loss' : ''}`}>
-                    {t(sale.profit < 0 ? 'loss' : 'profit', { amount: spaced(Math.abs(sale.profit)) })}
-                  </span>
+                  {sale.profit !== undefined && (
+                    <span className={`profit${sale.profit < 0 ? ' loss' : ''}`}>
+                      {t(sale.profit < 0 ? 'loss' : 'profit', { amount: spaced(Math.abs(sale.profit)) })}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}

@@ -1,9 +1,10 @@
-// Mirrors inventory/serializers.py
+// Mirrors inventory/serializers.py. Fields marked "owner only" are left out for sellers.
 
 export interface Batch {
   id: number
   brand: string
-  bought_price: number
+  /** Owner only. */
+  bought_price?: number
   picture: string | null
   date_added: string
 }
@@ -23,8 +24,10 @@ export interface SizeEntry {
 export interface BrandGroup {
   brand: string
   pairs: number
-  min_price: number
-  max_price: number
+  /** Owner only. */
+  min_price?: number
+  /** Owner only. */
+  max_price?: number
   last_added: string
   deliveries: number
   entries: SizeEntry[]
@@ -37,9 +40,11 @@ export interface Sale {
   code: string
   brand: string
   size: string
-  bought_price: number
+  /** Owner only. */
+  bought_price?: number
   sold_price: number
-  profit: number
+  /** Owner only. */
+  profit?: number
   payment: Payment
   sold_at: string
 }
@@ -91,6 +96,8 @@ export interface User {
   username: string
   first_name: string
   last_name: string
+  /** Owners see purchase prices and profit and manage stock; sellers scan and sell. */
+  is_owner: boolean
 }
 
 export interface DailyReport {

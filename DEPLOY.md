@@ -186,6 +186,10 @@ Create your admin account once:
 docker compose exec web python manage.py createsuperuser
 ```
 
+That account is an owner. For a seller, sign in to `/admin/`, add a user under
+**Users** and leave them out of the `owners` group: they can sell and print labels,
+but never see purchase prices or profit. Add someone to `owners` to make them an owner.
+
 Visit `http://your-domain.com` — the app should load.
 
 ---

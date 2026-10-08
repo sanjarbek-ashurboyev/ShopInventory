@@ -104,8 +104,9 @@ export default function DailyReport() {
                           </span>
                           <span className="report-day-money">
                             <strong>{som(sale.sold_price, unit)}</strong>
-                            <span className={`profit${sale.profit < 0 ? ' loss' : ''}`}>
-                              {t(sale.profit < 0 ? 'loss' : 'profit', { amount: spaced(Math.abs(sale.profit)) })}
+                            {/* Owner-only page: the API always sends owners the profit. */}
+                            <span className={`profit${sale.profit! < 0 ? ' loss' : ''}`}>
+                              {t(sale.profit! < 0 ? 'loss' : 'profit', { amount: spaced(Math.abs(sale.profit!)) })}
                             </span>
                           </span>
                         </Link>

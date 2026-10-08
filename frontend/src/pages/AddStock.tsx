@@ -232,7 +232,8 @@ function Added({ result, onAddMore }: { result: RestockResult; onAddMore: () => 
       <div className="page-head">
         <div>
           <h1 className="page-title">{t('addedTitle')}</h1>
-          <p className="page-sub">{first.batch.brand}, {som(first.batch.bought_price, t('som'))}: {pairs(total)}</p>
+          {/* Owner-only page: the API always sends owners the purchase price. */}
+          <p className="page-sub">{first.batch.brand}, {som(first.batch.bought_price!, t('som'))}: {pairs(total)}</p>
         </div>
       </div>
 

@@ -278,7 +278,7 @@ def labels_pdf(entries):
         pdf.drawString(x + label_w - pad - size_w, y + label_h - pad - 11, entry.size)
 
         room = label_w - 2 * pad - size_w - 3 * mm
-        brand = _truncate(entry.batch.brand, lambda t: pdfmetrics.stringWidth(t, 'DejaVu-Bold', 9) <= room)
+        brand = _truncate(entry.batch.brand, lambda t, room=room: pdfmetrics.stringWidth(t, 'DejaVu-Bold', 9) <= room)
         pdf.setFont('DejaVu-Bold', 9)
         pdf.drawString(x + pad, y + label_h - pad - 9, brand)
 

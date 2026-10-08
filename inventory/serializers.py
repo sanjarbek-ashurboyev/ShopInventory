@@ -158,7 +158,7 @@ class JSONListField(serializers.ListField):
             try:
                 data = json.loads(data)
             except ValueError:
-                raise serializers.ValidationError(_('Sizes must be a JSON list.'))
+                raise serializers.ValidationError(_('Sizes must be a JSON list.')) from None
         return super().to_internal_value(data)
 
 

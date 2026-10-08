@@ -2,8 +2,8 @@ import io
 import json
 import shutil
 import tempfile
-from unittest import mock
 from datetime import timedelta
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -72,8 +72,8 @@ class StockEntryTests(ApiTestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Batch.objects.count(), 1)
         lines = response.data['lines']
-        self.assertEqual([(l['entry']['size'], l['added'], l['merged']) for l in lines], [('41', 5, False), ('42', 3, False)])
-        codes = {l['entry']['code'] for l in lines}
+        self.assertEqual([(line['entry']['size'], line['added'], line['merged']) for line in lines], [('41', 5, False), ('42', 3, False)])
+        codes = {line['entry']['code'] for line in lines}
         self.assertEqual(len(codes), 2)
         for code in codes:
             self.assertEqual(len(code), CODE_LENGTH)
@@ -84,7 +84,7 @@ class StockEntryTests(ApiTestCase):
         code = self.entry('41').code
         response = self.add(brand='  nike   air ', sizes=(('41', 4), ('43', 2)))
         self.assertEqual(response.status_code, 201)
-        merged = next(l for l in response.data['lines'] if l['merged'])
+        merged = next(line for line in response.data['lines'] if line['merged'])
         self.assertEqual((merged['entry']['code'], merged['added'], merged['entry']['quantity']), (code, 4, 9))
         entry = self.entry('41')
         self.assertEqual((entry.quantity, entry.initial_quantity), (9, 9))

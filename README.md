@@ -29,6 +29,10 @@ Uzbek and Russian; the code and this document are in English.
   split and how much cash should be in the drawer.
 - **Exports.** Inventory and sales as CSV or Excel, and a daily report as `.xlsx`.
 - **Low-stock list** on the home screen.
+- **Owner and seller roles.** Sellers find stock, sell and print labels. Purchase prices,
+  profit, reports, exports and adding, editing or deleting stock are for owners only. The
+  API leaves those fields out of sellers' responses and refuses the endpoints with 403;
+  the app hides them too.
 - **Two languages:** Uzbek and Russian, switchable at any time.
 
 ### Security
@@ -51,7 +55,7 @@ Uzbek and Russian; the code and this document are in English.
 
 ## Tests
 
-64 tests cover stock merging, selling, reports, exports and the security rules.
+71 tests cover stock merging, selling, reports, exports, the security rules and what each role can see and do.
 
 ```bash
 DJANGO_DEBUG=1 python manage.py collectstatic --noinput
@@ -89,8 +93,11 @@ build). The full guide, including HTTPS, backups and updates, is in [DEPLOY.md](
 
 ## Known limitations
 
-- **One access level.** Every signed-in user can see purchase prices and profit, edit or
-  delete products and export data. There is no separate seller role yet.
+- **Roles are managed in the Django admin.** An owner is a superuser or a member of the
+  `owners` group; every other account is a seller. Accounts that existed before roles were
+  added were made owners. There is no screen in the app for managing staff yet.
+- **Sellers can sell below cost.** They don't see the purchase price, so they can't tell. The
+  owner sees the loss in the reports afterwards.
 - **A mistaken sale can only be undone in the Django admin.** The API's sales history is
   read-only; deleting a sale in the admin puts the pair back in stock.
 - **The tests run on SQLite only.** Selling the last pair is a single atomic `UPDATE`, but

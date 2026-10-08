@@ -6,6 +6,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from .models import Batch, Sale, SizeEntry
+from .permissions import is_owner
 
 # Well under the database's integer limit (~2.1 billion); a typo with extra zeros gets a clear 400, not a crash.
 MAX_PRICE = 1_000_000_000
@@ -14,13 +15,37 @@ MAX_PAIRS = 9999
 SIZE_PATTERN = re.compile(r'^\d{1,2}([.,]5)?$')
 
 
+class OwnerFieldsMixin:
+    """Leaves out `owner_only_fields` when a seller makes the request.
+
+    Nested serializers read the request from the root's context, so it must be passed in.
+    """
+
+    owner_only_fields = ()
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get('request')
+        if request is not None and not is_owner(request.user):
+            for name in self.owner_only_fields:
+                fields.pop(name, None)
+        return fields
+
+
 class UserSerializer(serializers.ModelSerializer):
+    is_owner = serializers.SerializerMethodField()
+
     class Meta:
         model = get_user_model()
-        fields = ['id', 'username', 'first_name', 'last_name']
+        fields = ['id', 'username', 'first_name', 'last_name', 'is_owner']
+
+    def get_is_owner(self, user) -> bool:
+        return is_owner(user)
 
 
-class BatchSerializer(serializers.ModelSerializer):
+class BatchSerializer(OwnerFieldsMixin, serializers.ModelSerializer):
+    owner_only_fields = ['bought_price']
+
     class Meta:
         model = Batch
         fields = ['id', 'brand', 'bought_price', 'picture', 'date_added']
@@ -50,8 +75,10 @@ class SizeEntrySerializer(serializers.ModelSerializer):
         return entry.initial_quantity - entry.quantity
 
 
-class BrandGroupSerializer(serializers.Serializer):
+class BrandGroupSerializer(OwnerFieldsMixin, serializers.Serializer):
     """One brand on the stock list, with every matching size line under it."""
+
+    owner_only_fields = ['min_price', 'max_price']
 
     brand = serializers.CharField()
     pairs = serializers.IntegerField(help_text='Pairs left across all sizes shown.')
@@ -62,7 +89,9 @@ class BrandGroupSerializer(serializers.Serializer):
     entries = SizeEntrySerializer(many=True)
 
 
-class SaleSerializer(serializers.ModelSerializer):
+class SaleSerializer(OwnerFieldsMixin, serializers.ModelSerializer):
+    owner_only_fields = ['bought_price', 'profit']
+
     code = serializers.CharField(source='size_entry.code', read_only=True)
     brand = serializers.CharField(source='size_entry.batch.brand', read_only=True)
     size = serializers.CharField(source='size_entry.size', read_only=True)
@@ -93,7 +122,7 @@ class SizeEntryDetailSerializer(SizeEntrySerializer):
         return barcode_svg(entry.code)
 
     def get_recent_sales(self, entry) -> list[dict]:
-        return SaleSerializer(entry.sales.select_related('size_entry__batch')[:20], many=True).data
+        return SaleSerializer(entry.sales.select_related('size_entry__batch')[:20], many=True, context=self.context).data
 
     def get_last_brand_price(self, entry) -> int | None:
         """Most recent price this brand sold for: a one-tap suggestion when selling."""

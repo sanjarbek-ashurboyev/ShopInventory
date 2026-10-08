@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { download } from '../api/client'
-import { useInStockForLabels, useInvalidateStock } from '../api/hooks'
+import { useInStockForLabels, useInvalidateStock, useIsOwner } from '../api/hooks'
 import type { SizeEntry } from '../api/types'
 import { ChevronIcon } from '../components/Icons'
 import { ErrorNotice, Loading, SizeChip, useToast } from '../components/ui'
@@ -15,6 +15,7 @@ export default function Labels() {
   const { t } = useI18n()
   const toast = useToast()
   const invalidate = useInvalidateStock()
+  const isOwner = useIsOwner()
   const [onlyUnprinted, setOnlyUnprinted] = useState(true)
   const entries = useInStockForLabels(onlyUnprinted)
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set())
@@ -91,7 +92,7 @@ export default function Labels() {
         <div className="empty">
           <h2>{t('allPrinted')}</h2>
           <p>{t('allPrintedHint')}</p>
-          <Link className="button" to="/add">{t('addStock')}</Link>
+          {isOwner && <Link className="button" to="/add">{t('addStock')}</Link>}
         </div>
       ) : (
         <>

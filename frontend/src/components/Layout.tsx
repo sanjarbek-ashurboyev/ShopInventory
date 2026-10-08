@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { useIsOwner } from '../api/hooks'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { unlockSound } from '../lib/feedback'
@@ -10,6 +11,7 @@ export default function Layout() {
   const { t } = useI18n()
   const { logout } = useAuth()
   const { pathname } = useLocation()
+  const isOwner = useIsOwner()
   const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : undefined)
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function Layout() {
       </main>
 
       <nav className="nav" aria-label={t('mainMenu')}>
-        <ul>
+        <ul className={isOwner ? undefined : 'four'}>
           <li><NavLink to="/" end className={navClass}><HomeIcon />{t('navHome')}</NavLink></li>
           <li><NavLink to="/stock" className={({ isActive }) => (isActive || pathname === '/add' || pathname.startsWith('/e/') ? 'active' : undefined)}><ListIcon />{t('navStock')}</NavLink></li>
           <li className="scan-tab">
@@ -48,7 +50,9 @@ export default function Layout() {
             </NavLink>
           </li>
           <li><NavLink to="/labels" className={navClass}><TagIcon />{t('navLabels')}</NavLink></li>
-          <li><NavLink to="/stats" className={({ isActive }) => (isActive || pathname === '/export' || pathname.startsWith('/reports') ? 'active' : undefined)}><ChartIcon />{t('navStats')}</NavLink></li>
+          {isOwner && (
+            <li><NavLink to="/stats" className={({ isActive }) => (isActive || pathname === '/export' || pathname.startsWith('/reports') ? 'active' : undefined)}><ChartIcon />{t('navStats')}</NavLink></li>
+          )}
         </ul>
       </nav>
     </div>

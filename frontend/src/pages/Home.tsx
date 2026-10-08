@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { useLowStock, useStats } from '../api/hooks'
+import { useIsOwner, useLowStock, useStats } from '../api/hooks'
 import { PlusIcon, ScanIcon } from '../components/Icons'
 import { ErrorNotice, Loading, SizeChip } from '../components/ui'
 import { useI18n } from '../i18n'
@@ -12,7 +12,8 @@ const LOW_STOCK_SHOWN = 6
 export default function Home() {
   const { t } = useI18n()
   const today = useShopToday()
-  const stats = useStats({ start: today, end: today })
+  const isOwner = useIsOwner()
+  const stats = useStats({ start: today, end: today }, isOwner)
   const low = useLowStock()
   const unit = t('som')
 
@@ -30,13 +31,15 @@ export default function Home() {
           <ScanIcon size={26} />
           {t('sellTitle')}
         </Link>
-        <Link className="button block ghost" to="/add">
-          <PlusIcon size={20} />
-          {t('addStock')}
-        </Link>
+        {isOwner && (
+          <Link className="button block ghost" to="/add">
+            <PlusIcon size={20} />
+            {t('addStock')}
+          </Link>
+        )}
       </div>
 
-      <section className="section">
+      {isOwner && <section className="section">
         {stats.isPending ? (
           <Loading />
         ) : stats.isError ? (
@@ -54,7 +57,7 @@ export default function Home() {
             <Link className="home-more" to={`/reports/${today}`}>{t('todayReport')} →</Link>
           </>
         )}
-      </section>
+      </section>}
 
       <section className="section">
         <div className="section-head">
@@ -77,7 +80,7 @@ export default function Home() {
                   <SizeChip size={entry.size} />
                   <span>
                     <span className="stock-brand">{entry.batch.brand}</span>
-                    <span className="stock-meta">{som(entry.batch.bought_price, unit)}</span>
+                    {entry.batch.bought_price !== undefined && <span className="stock-meta">{som(entry.batch.bought_price, unit)}</span>}
                   </span>
                   <span className="stock-qty"><strong>{entry.quantity}</strong><span>{t('left')}</span></span>
                 </Link>

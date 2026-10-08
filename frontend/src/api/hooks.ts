@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { BrandGroup, DailyReport, Page, Payment, ReportDay, RestockResult, Sale, SizeEntry, SizeEntryDetail, Stats } from './types'
+import type { BrandGroup, DailyReport, Page, Payment, ReportDay, RestockResult, Sale, SizeEntry, SizeEntryDetail, Stats, User } from './types'
 
 function query(params: Record<string, string | number | boolean | undefined | null>) {
   const search = new URLSearchParams()
@@ -9,6 +9,16 @@ function query(params: Record<string, string | number | boolean | undefined | nu
   })
   const text = search.toString()
   return text ? `?${text}` : ''
+}
+
+/** The signed-in account. Logging out clears the cache, so the next account is fetched fresh. */
+export function useMe() {
+  return useQuery({ queryKey: ['me'], queryFn: () => api<User>('/auth/me/'), staleTime: Infinity })
+}
+
+/** False until the account has loaded, so owner-only figures never flash up for a seller. */
+export function useIsOwner() {
+  return useMe().data?.is_owner === true
 }
 
 export interface EntryFilters {
@@ -64,11 +74,12 @@ export function useEntry(code: string) {
   })
 }
 
-export function useStats(params: { start?: string; end?: string; slow_days?: number }) {
+export function useStats(params: { start?: string; end?: string; slow_days?: number }, enabled = true) {
   return useQuery({
     queryKey: ['stats', params],
     queryFn: () => api<Stats>(`/stats/${query(params)}`),
     placeholderData: keepPreviousData,
+    enabled,
   })
 }
 

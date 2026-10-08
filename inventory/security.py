@@ -39,7 +39,10 @@ def excel_safe(value):
 
 def revoke_tokens_on_password_change(sender, instance, **kwargs):
     """A new password logs the user out everywhere: every refresh token they hold stops working."""
-    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+    from rest_framework_simplejwt.token_blacklist.models import (
+        BlacklistedToken,
+        OutstandingToken,
+    )
 
     if not instance.pk:
         return

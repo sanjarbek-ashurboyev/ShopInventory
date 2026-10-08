@@ -19,13 +19,24 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from . import reports, services, stats
-from .security import excel_safe
 from .filters import SaleFilter, SizeEntryFilter
 from .models import Batch, Sale, SizeEntry
+from .security import excel_safe
 from .serializers import (
-    BatchCreateSerializer, BatchSerializer, BrandGroupSerializer, DateRangeSerializer, DayQuerySerializer, LabelSheetSerializer,
-    RestockResultSerializer, SaleSerializer, SellResultSerializer, SellSerializer, SizeEntryDetailSerializer, SizeEntryEditSerializer,
-    SizeEntrySerializer, UserSerializer,
+    BatchCreateSerializer,
+    BatchSerializer,
+    BrandGroupSerializer,
+    DateRangeSerializer,
+    DayQuerySerializer,
+    LabelSheetSerializer,
+    RestockResultSerializer,
+    SaleSerializer,
+    SellResultSerializer,
+    SellSerializer,
+    SizeEntryDetailSerializer,
+    SizeEntryEditSerializer,
+    SizeEntrySerializer,
+    UserSerializer,
 )
 
 # The list's sort options, applied to whole brands instead of single size lines.
@@ -203,7 +214,7 @@ class LabelSheetView(APIView):
         if missing:
             raise ValidationError({'items': _('Unknown codes: %(codes)s') % {'codes': ', '.join(missing)}})
 
-        sheet = [entries[code] for code, item in zip(codes, items) for _n in range(item['copies'])]
+        sheet = [entries[code] for code, item in zip(codes, items, strict=True) for _n in range(item['copies'])]
         pdf = services.labels_pdf(sheet)
         SizeEntry.objects.filter(code__in=codes).update(label_printed=True)
         response = HttpResponse(pdf, content_type='application/pdf')

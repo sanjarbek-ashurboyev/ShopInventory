@@ -55,11 +55,19 @@ Uzbek and Russian; the code and this document are in English.
 
 ## Tests
 
-71 tests cover stock merging, selling, reports, exports, the security rules and what each role can see and do.
+72 tests cover stock merging, selling, reports, exports, the security rules and what each role can see and do.
 
 ```bash
 DJANGO_DEBUG=1 python manage.py collectstatic --noinput
 DJANGO_DEBUG=1 python manage.py test
+```
+
+One test sells the last pair of a size from two connections at the same moment and checks
+that exactly one sale goes through. SQLite runs one write at a time, so that test is skipped
+there and runs against PostgreSQL in CI's second job. To run the whole suite on PostgreSQL:
+
+```bash
+DATABASE_URL=postgres://user:password@localhost:5432/shopinventory DJANGO_DEBUG=1 python manage.py test
 ```
 
 ## Running locally
@@ -100,9 +108,6 @@ build). The full guide, including HTTPS, backups and updates, is in [DEPLOY.md](
   owner sees the loss in the reports afterwards.
 - **A mistaken sale can only be undone in the Django admin.** The API's sales history is
   read-only; deleting a sale in the admin puts the pair back in stock.
-- **The tests run on SQLite only.** Selling the last pair is a single atomic `UPDATE`, but
-  that guarantee is not yet tested against PostgreSQL with concurrent requests
-  ([#1](https://github.com/sanjarbek-ashurboyev/ShopInventory/issues/1)) ([#2](https://github.com/sanjarbek-ashurboyev/ShopInventory/issues/2)).
 
 ## License
 

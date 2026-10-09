@@ -31,6 +31,36 @@ jobs:
       - run: python manage.py collectstatic --noinput
       - run: python manage.py test --verbosity 2
 
+  # SQLite runs one write at a time, so selling the last pair from two counters at once
+  # (inventory/test_concurrency.py) is only tested here, on the PostgreSQL production uses.
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: shopinventory
+          POSTGRES_USER: shopinventory
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U shopinventory"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_DEBUG: "1"
+      DATABASE_URL: postgres://shopinventory:ci@localhost:5432/shopinventory
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python manage.py collectstatic --noinput
+      - run: python manage.py test --verbosity 2
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
